@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html style="background: red; color: yellow; font-size: 30px; text-align: center;">
+
+<body>
+    <h1>FINAL CHECK</h1>
+    <p>System is listening on Port 6677</p>
+    <div id="status">Connecting...</div>
+    <script>
+        fetch('/track', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Bypass-Tunnel-Reminder': 'true'
+            },
+            body: JSON.stringify({ type: 'FINAL_PING', time: Date.now() })
+        }).then(() => document.getElementById('status').innerText = "CONNECTED & LOGGED")
+            .catch(e => document.getElementById('status').innerText = "FAIL: " + e);
+    </script>
+</body>
+
+</html>

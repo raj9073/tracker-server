@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>DEBUG PAGE - FORCE RELOAD</title>
+    <style>
+        body {
+            background: #220033;
+            /* Distinct purple background */
+            color: #fff;
+            font-family: monospace;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #debug {
+            text-align: left;
+            border: 2px solid #0f0;
+            padding: 10px;
+            margin: 20px auto;
+            width: 90%;
+            height: 300px;
+            overflow: auto;
+            background: #000;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>DEBUG MODE: ACTIVE</h1>
+    <p>If you see this, the server is serving new files correctly.</p>
+    <div id="debug">Initializing debug sequence...</div>
+
+    <script>
+        const debug = document.getElementById('debug');
+        function log(msg, type = 'INFO') {
+            const div = document.createElement('div');
+            div.innerText = `[${new Date().toLocaleTimeString()}] [${type}] ${msg}`;
+            div.style.color = type === 'ERROR' ? '#f55' : '#0f0';
+            debug.appendChild(div);
+        }
+
+        // Override console
+        window.onerror = function (msg, url, line) {
+            log(`Global Error: ${msg} @ ${line}`, 'ERROR');
+        };
+
+        log("Page loaded. Attempting to contact server...");
+
+        // Test Fetch
+        fetch('/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'DEBUG_PAGE_TEST', time: Date.now() })
+        })
+            .then(res => {
+                log(`Server responded with status: ${res.status}`);
+                if (res.ok) {
+                    log("SUCCESS! Server received data.", "SUCCESS");
+                    res.text().then(t => log("Server message: " + t));
+                } else {
+                    log("Server error: " + res.statusText, "ERROR");
+                }
+            })
+            .catch(err => {
+                log("FETCH FAILED: " + err.message, "ERROR");
+                log("This usually means the connection is blocked or server is down.", "ERROR");
+            });
+    </script>
+</body>
+
+</html>
