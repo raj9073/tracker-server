@@ -154,6 +154,9 @@ app.post('/track', async (req, res) => {
     try {
       fs.appendFileSync('logs.txt', logContent);
       console.log('Log saved successfully to logs.txt');
+
+      // CRITICAL FOR RENDER: Print the formatted log to stdout so it shows in the dashboard
+      console.log('\n' + logContent + '\n');
     } catch (fileError) {
       console.error('Error writing to log file:', fileError);
       // Try async as fallback
