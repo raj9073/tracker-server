@@ -176,6 +176,16 @@ app.post('/track', async (req, res) => {
   }
 });
 
+app.get('/api/logs', (req, res) => {
+  const logPath = path.join(__dirname, 'logs.txt');
+  if (fs.existsSync(logPath)) {
+    const content = fs.readFileSync(logPath, 'utf8');
+    res.json({ success: true, logs: content });
+  } else {
+    res.json({ success: false, logs: 'No logs yet.' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server executing on port ${port} (PID: ${process.pid})`);
   const startupMsg = `SERVER RESTARTED AT ${new Date().toISOString()}\n`;
