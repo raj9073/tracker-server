@@ -186,6 +186,18 @@ app.get('/api/logs', (req, res) => {
   }
 });
 
+app.post('/api/logs/clear', (req, res) => {
+  const logPath = path.join(__dirname, 'logs.txt');
+  try {
+    fs.writeFileSync(logPath, ''); // Clear file content
+    console.log('Logs cleared via API');
+    res.json({ success: true, message: 'Logs cleared' });
+  } catch (e) {
+    console.error('Failed to clear logs:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server executing on port ${port} (PID: ${process.pid})`);
   const startupMsg = `SERVER RESTARTED AT ${new Date().toISOString()}\n`;

