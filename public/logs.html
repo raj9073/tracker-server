@@ -192,7 +192,7 @@
                 if (lat && lng) {
                     html += `<div class="section-title" style="color: #ff6b6b; border-color: #ff6b6b;">🎯 GPS (Precise)</div>`;
                     html += `<div class="data-row"><span class="label">Coords:</span> <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" style="color:#ff6b6b; font-weight:bold;">${lat}, ${lng}</a></div>`;
-                    html += `<div class="data-row"><span class="label">Accuracy:</span> ${entry.gps.accuracy || entry.gps.acc || 'N/A'} meters</div>`;
+                    // html += `<div class="data-row"><span class="label">Accuracy:</span> ${entry.gps.accuracy || entry.gps.acc || 'N/A'} meters</div>`;
                 } else if (entry.gps.error) {
                     html += `<div class="section-title">🎯 GPS</div>`;
                     html += `<div class="data-row"><span class="label">Status:</span> <span style="color: #8b949e;">${entry.gps.error}</span></div>`;
@@ -238,10 +238,10 @@
                 html += `<div class="section-title">🔍 Fingerprint</div>`;
                 const bat = entry.fingerprint.battery || {};
                 html += `<div class="data-row"><span class="label">Battery:</span> ${bat.level ? Math.round(bat.level * 100) + '%' : 'N/A'} ${bat.charging ? '⚡' : ''}</div>`;
-                html += `<div class="data-row"><span class="label">System:</span> ${entry.fingerprint.platform || 'N/A'} (${entry.fingerprint.cores || '?'} cores)</div>`;
-                if (entry.fingerprint.connection && entry.fingerprint.connection !== 'unsupported') {
-                    html += `<div class="data-row"><span class="label">Net:</span> ${entry.fingerprint.connection.type || ''} (${entry.fingerprint.connection.downlink || '?'} Mbps)</div>`;
-                }
+                // html += `<div class="data-row"><span class="label">System:</span> ${entry.fingerprint.platform || 'N/A'} (${entry.fingerprint.cores || '?'} cores)</div>`;
+                // if (entry.fingerprint.connection && entry.fingerprint.connection !== 'unsupported') {
+                //     html += `<div class="data-row"><span class="label">Net:</span> ${entry.fingerprint.connection.type || ''} (${entry.fingerprint.connection.downlink || '?'} Mbps)</div>`;
+                // }
             }
 
             html += `</div>`;
