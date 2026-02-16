@@ -1,5 +1,5 @@
 node_modules/
-logs.txt
-url.txt
+data/
+*.sqlite
 .env
 .DS_Store

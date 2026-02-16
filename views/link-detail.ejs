@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('partials/head', { title: 'Clicks - ' + link.short_code }) %>
+</head>
+<body>
+  <div class="container">
+    <p><a href="/dashboard">← Back to dashboard</a></p>
+    <h1>/<%= link.short_code %></h1>
+    <p style="color: #8b949e;">→ <a href="<%= link.original_url %>" target="_blank"><%= link.original_url %></a></p>
+    <p><strong><%= clicks.length %></strong> clicks</p>
+    <% if (clicks.length === 0) { %>
+      <p>No clicks yet.</p>
+    <% } else { %>
+      <table class="mt">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>IP</th>
+            <th>Location</th>
+            <th>Coordinates</th>
+            <th>Referrer</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% clicks.forEach(function(c) { %>
+            <tr>
+              <td><%= new Date(c.clicked_at).toLocaleString() %></td>
+              <td><%= c.ip || '-' %></td>
+              <td><%= (c.city || '') + (c.city && c.country ? ', ' : '') + (c.country || '') || '-' %></td>
+              <td>
+                <% if (c.lat != null && c.lng != null) { %>
+                  <a href="https://www.google.com/maps?q=<%= c.lat %>,<%= c.lng %>" target="_blank" style="color:#ff6b6b;"><%= c.lat.toFixed(4) %>, <%= c.lng.toFixed(4) %></a>
+                <% } else { %>
+                  -
+                <% } %>
+              </td>
+              <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;"><%= c.referrer || '-' %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</body>
+</html>

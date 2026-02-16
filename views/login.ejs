@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('partials/head', { title: 'Login - Dashboard' }) %>
+</head>
+<body>
+  <div class="container">
+    <h1>Dashboard login</h1>
+    <form method="POST" action="/login" class="mt">
+      <input type="password" name="password" placeholder="Password" required autocomplete="current-password">
+      <button type="submit" class="btn btn-primary mt">Login</button>
+    </form>
+    <% if (typeof error === 'string' && error) { %>
+      <p class="error"><%= error %></p>
+    <% } %>
+    <p class="mt"><a href="/">Back to home</a></p>
+  </div>
+</body>
+</html>

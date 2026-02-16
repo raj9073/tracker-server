@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('partials/head', { title: 'Link Shortener' }) %>
+</head>
+<body>
+  <div class="container">
+    <h1>Shorten a link</h1>
+    <form method="POST" action="/create" class="mt">
+      <input type="text" name="url" placeholder="https://example.com" required autocomplete="off">
+      <button type="submit" class="btn btn-primary mt">Shorten</button>
+    </form>
+    <% if (typeof error === 'string' && error) { %>
+      <p class="error"><%= error %></p>
+    <% } %>
+    <% if (typeof shortUrl === 'string' && shortUrl) { %>
+      <div class="card mt">
+        <p class="success">Your short link:</p>
+        <p><strong id="short-url"><%= shortUrl %></strong></p>
+        <button type="button" class="btn btn-primary mt" onclick="copyUrl()">Copy link</button>
+      </div>
+    <% } %>
+    <p class="mt"><a href="/dashboard">Dashboard</a> (login required)</p>
+  </div>
+  <script>
+    function copyUrl() {
+      const el = document.getElementById('short-url');
+      if (el) navigator.clipboard.writeText(el.textContent).then(() => alert('Copied!'));
+    }
+  </script>
+</body>
+</html>
