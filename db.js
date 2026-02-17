@@ -1,5 +1,9 @@
 const { neon } = require('@neondatabase/serverless');
-const { nanoid } = require('nanoid');
+const crypto = require('crypto');
+
+function nanoid(size = 8) {
+  return crypto.randomBytes(size).toString('base64url').slice(0, size);
+}
 
 const connString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 let sql = null;
