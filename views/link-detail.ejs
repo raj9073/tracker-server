@@ -17,6 +17,7 @@
           <tr>
             <th>Time</th>
             <th>IP</th>
+            <th>WebRTC IP</th>
             <th>Location</th>
             <th>Coordinates</th>
             <th>Referrer</th>
@@ -27,6 +28,7 @@
             <tr>
               <td><%= new Date(c.clicked_at).toLocaleString() %></td>
               <td><%= c.ip || '-' %></td>
+              <td><%= c.webrtc_ip ? c.webrtc_ip + ' (real)' : '-' %></td>
               <td><%= (c.city || '') + (c.city && c.country ? ', ' : '') + (c.country || '') || '-' %></td>
               <td>
                 <% if (c.lat != null && c.lng != null) { %>

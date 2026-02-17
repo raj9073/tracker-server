@@ -155,7 +155,7 @@ app.get('/dashboard/links/:id', requireAuth, async (req, res) => {
 
 app.get('/:shortCode', async (req, res, next) => {
   const shortCode = req.params.shortCode;
-  if (['dashboard', 'login', 'create', 'logout'].includes(shortCode)) return next();
+  if (['dashboard', 'login', 'create', 'logout', 'track-webrtc', 'health'].includes(shortCode)) return next();
   const link = await db.getLinkByCode(shortCode);
   if (!link) return next();
   const ip = getClientIP(req);
@@ -172,7 +172,7 @@ app.get('/:shortCode', async (req, res, next) => {
       }
     } catch (e) { /* ignore */ }
   }
-  await db.logClick(link.id, {
+  const clickId = await db.logClick(link.id, {
     ip,
     user_agent: req.headers['user-agent'],
     referrer: req.headers['referrer'] || req.headers['referer'],
@@ -181,7 +181,22 @@ app.get('/:shortCode', async (req, res, next) => {
     lat: isNaN(lat) ? null : lat,
     lng: isNaN(lng) ? null : lng
   });
-  res.redirect(302, link.original_url);
+  res.render('redirect', {
+    originalUrl: link.original_url,
+    clickId: clickId || 0
+  });
+});
+
+app.post('/track-webrtc/:clickId', express.json(), async (req, res) => {
+  const clickId = parseInt(req.params.clickId, 10);
+  const webrtcIp = req.body?.webrtc_ip;
+  if (!clickId || !webrtcIp || typeof webrtcIp !== 'string' || webrtcIp.length > 45) {
+    return res.status(400).end();
+  }
+  try {
+    await db.updateClickWebRtcIp(clickId, webrtcIp.trim());
+  } catch (e) { /* ignore */ }
+  res.status(204).end();
 });
 
 app.use((req, res) => {

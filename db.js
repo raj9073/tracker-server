@@ -40,6 +40,7 @@ async function initSchema() {
   `;
   await db`CREATE INDEX IF NOT EXISTS idx_links_short_code ON links(short_code)`;
   await db`CREATE INDEX IF NOT EXISTS idx_clicks_link_id ON clicks(link_id)`;
+  await db`ALTER TABLE clicks ADD COLUMN IF NOT EXISTS webrtc_ip TEXT`;
 }
 
 async function createLink(originalUrl) {
@@ -75,7 +76,7 @@ async function getLinkByCode(shortCode) {
 
 async function logClick(linkId, data) {
   const db = getSql();
-  await db`
+  const rows = await db`
     INSERT INTO clicks (link_id, ip, user_agent, referrer, country, city, lat, lng)
     VALUES (
       ${linkId},
@@ -87,6 +88,16 @@ async function logClick(linkId, data) {
       ${data.lat ?? null},
       ${data.lng ?? null}
     )
+    RETURNING id
+  `;
+  return rows[0]?.id;
+}
+
+async function updateClickWebRtcIp(clickId, webrtcIp) {
+  if (!clickId || !webrtcIp) return;
+  const db = getSql();
+  await db`
+    UPDATE clicks SET webrtc_ip = ${webrtcIp} WHERE id = ${clickId}
   `;
 }
 
@@ -118,6 +129,7 @@ module.exports = {
   createLink,
   getLinkByCode,
   logClick,
+  updateClickWebRtcIp,
   getAllLinksWithClickCounts,
   getClicksForLink,
 };
