@@ -15,20 +15,36 @@
       <p class="mt">No links yet. <a href="/">Create one</a></p>
     <% } else { %>
       <div class="mt">
-        <% links.forEach(function(link) { %>
+        <% links.forEach(function(link, index) { %>
           <div class="card flex" style="justify-content: space-between;">
             <div>
+              <span style="color: #8b949e; margin-right: 8px;"><%= index + 1 %>.</span>
               <a href="/dashboard/links/<%= link.id %>"><strong>/<%= link.short_code %></strong></a>
               <span style="color: #8b949e;"> → <%= link.original_url %></span>
               <br>
               <small style="color: #8b949e;"><%= link.click_count %> clicks · <%= new Date(link.created_at).toLocaleString() %></small>
             </div>
-            <a href="/<%= link.short_code %>" target="_blank" class="btn btn-primary">Open</a>
+            <div class="flex">
+              <button type="button" class="btn btn-secondary copy-btn" data-short-code="<%= link.short_code %>">Copy Link</button>
+              <a href="/<%= link.short_code %>" target="_blank" class="btn btn-primary">Open</a>
+            </div>
           </div>
         <% }); %>
       </div>
     <% } %>
     <p class="mt"><a href="/">Create new link</a></p>
   </div>
+  <script>
+    document.querySelectorAll('.copy-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var url = window.location.origin + '/' + this.getAttribute('data-short-code');
+        navigator.clipboard.writeText(url).then(function() {
+          var text = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(function() { btn.textContent = text; }, 1500);
+        });
+      });
+    });
+  </script>
 </body>
 </html>
