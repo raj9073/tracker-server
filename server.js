@@ -40,7 +40,8 @@ async function ensureSchema(req, res, next) {
     schemaInitialized = true;
   } catch (e) {
     console.error('Schema init error:', e);
-    return res.status(500).send('Database not configured. Set DATABASE_URL or POSTGRES_URL.');
+    const msg = 'Database error. DATABASE_URL must be postgresql://user:pass@host/db?sslmode=require (from Neon Connection string, not REST URL). ' + e.message;
+    return res.status(500).send(msg);
   }
   next();
 }
@@ -48,6 +49,9 @@ async function ensureSchema(req, res, next) {
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.get('/health', (req, res) => res.send('ok'));
+
 app.use(ensureSchema);
 
 function getClientIP(req) {
