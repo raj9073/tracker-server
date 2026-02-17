@@ -1,8 +1,9 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
+const cookieParser = require('cookie-parser');
+const crypto = require('crypto');
 const axios = require('axios');
-const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 
@@ -14,20 +15,40 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 const isProduction = process.env.NODE_ENV === 'production';
-app.use(session({
-  secret: process.env.SECRET || 'change-me-in-production',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000
-  }
-}));
+const SECRET = process.env.SECRET || 'change-me-in-production';
+const AUTH_COOKIE = 'auth';
 
+function signAuth(val) {
+  return val + '.' + crypto.createHmac('sha256', SECRET).update(val).digest('hex');
+}
+
+function verifyAuthCookie(signed) {
+  if (!signed || typeof signed !== 'string') return false;
+  const dot = signed.indexOf('.');
+  if (dot === -1) return false;
+  const val = signed.slice(0, dot);
+  const sig = signed.slice(dot + 1);
+  const expected = crypto.createHmac('sha256', SECRET).update(val).digest('hex');
+  return sig === expected && val === 'ok';
+}
+
+let schemaInitialized = false;
+async function ensureSchema(req, res, next) {
+  if (schemaInitialized) return next();
+  try {
+    await db.initSchema();
+    schemaInitialized = true;
+  } catch (e) {
+    console.error('Schema init error:', e);
+    return res.status(500).send('Database not configured. Set DATABASE_URL or POSTGRES_URL.');
+  }
+  next();
+}
+
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(ensureSchema);
 
 function getClientIP(req) {
   const raw = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
@@ -51,7 +72,7 @@ function validateUrl(url) {
 }
 
 function requireAuth(req, res, next) {
-  if (req.session.authenticated) return next();
+  if (verifyAuthCookie(req.cookies[AUTH_COOKIE])) return next();
   res.redirect('/login');
 }
 
@@ -59,13 +80,13 @@ app.get('/', (req, res) => {
   res.render('index', { error: null, shortUrl: null });
 });
 
-app.post('/create', (req, res) => {
+app.post('/create', async (req, res) => {
   const url = (req.body.url || '').trim();
   if (!validateUrl(url)) {
     return res.render('index', { error: 'Please enter a valid http:// or https:// URL', shortUrl: null });
   }
   try {
-    const { shortCode } = db.createLink(url);
+    const { shortCode } = await db.createLink(url);
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const shortUrl = `${baseUrl}/${shortCode}`;
     res.render('index', { error: null, shortUrl });
@@ -76,7 +97,7 @@ app.post('/create', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  if (req.session.authenticated) return res.redirect('/dashboard');
+  if (verifyAuthCookie(req.cookies[AUTH_COOKIE])) return res.redirect('/dashboard');
   res.render('login', { error: null });
 });
 
@@ -96,37 +117,42 @@ app.post('/login', (req, res) => {
     return res.render('login', { error: 'Server not configured. Set DASHBOARD_PASSWORD or DASHBOARD_PASSWORD_HASH.' });
   }
   if (valid) {
-    req.session.authenticated = true;
+    res.cookie(AUTH_COOKIE, signAuth('ok'), {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/'
+    });
     return res.redirect('/dashboard');
   }
   res.render('login', { error: 'Invalid password' });
 });
 
 app.post('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.redirect('/login');
-  });
+  res.clearCookie(AUTH_COOKIE, { path: '/' });
+  res.redirect('/login');
 });
 
-app.get('/dashboard', requireAuth, (req, res) => {
-  const links = db.getAllLinksWithClickCounts();
+app.get('/dashboard', requireAuth, async (req, res) => {
+  const links = await db.getAllLinksWithClickCounts();
   res.render('dashboard', { links });
 });
 
-app.get('/dashboard/links/:id', requireAuth, (req, res) => {
+app.get('/dashboard/links/:id', requireAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.redirect('/dashboard');
-  const links = db.getAllLinksWithClickCounts();
+  const links = await db.getAllLinksWithClickCounts();
   const link = links.find(l => l.id === id);
   if (!link) return res.redirect('/dashboard');
-  const clicks = db.getClicksForLink(id);
+  const clicks = await db.getClicksForLink(id);
   res.render('link-detail', { link, clicks });
 });
 
 app.get('/:shortCode', async (req, res, next) => {
   const shortCode = req.params.shortCode;
   if (['dashboard', 'login', 'create', 'logout'].includes(shortCode)) return next();
-  const link = db.getLinkByCode(shortCode);
+  const link = await db.getLinkByCode(shortCode);
   if (!link) return next();
   const ip = getClientIP(req);
   let country = null, city = null, lat = null, lng = null;
@@ -142,7 +168,7 @@ app.get('/:shortCode', async (req, res, next) => {
       }
     } catch (e) { /* ignore */ }
   }
-  db.logClick(link.id, {
+  await db.logClick(link.id, {
     ip,
     user_agent: req.headers['user-agent'],
     referrer: req.headers['referrer'] || req.headers['referer'],
@@ -158,16 +184,21 @@ app.use((req, res) => {
   res.status(404).render('404');
 });
 
-async function start() {
-  await db.initDb();
+if (process.env.VERCEL) {
+  module.exports = app;
+} else {
   const hasAuth = !!(process.env.DASHBOARD_PASSWORD || process.env.DASHBOARD_PASSWORD_HASH);
   if (!hasAuth) console.warn('WARNING: No DASHBOARD_PASSWORD or DASHBOARD_PASSWORD_HASH set - login will fail');
-  app.listen(PORT, () => {
-    console.log(`Link shortener running on port ${PORT}${hasAuth ? ' (auth configured)' : ''}`);
-  });
+  schemaInitialized = false;
+  db.initSchema()
+    .then(() => {
+      schemaInitialized = true;
+      app.listen(PORT, () => {
+        console.log(`Link shortener running on port ${PORT}${hasAuth ? ' (auth configured)' : ''}`);
+      });
+    })
+    .catch(err => {
+      console.error('Failed to start:', err);
+      process.exit(1);
+    });
 }
-
-start().catch(err => {
-  console.error('Failed to start:', err);
-  process.exit(1);
-});
