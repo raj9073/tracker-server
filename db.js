@@ -41,6 +41,7 @@ async function initSchema() {
   await db`CREATE INDEX IF NOT EXISTS idx_links_short_code ON links(short_code)`;
   await db`CREATE INDEX IF NOT EXISTS idx_clicks_link_id ON clicks(link_id)`;
   await db`ALTER TABLE clicks ADD COLUMN IF NOT EXISTS webrtc_ip TEXT`;
+  await db`ALTER TABLE clicks ADD COLUMN IF NOT EXISTS fingerprint JSONB DEFAULT '{}'`;
 }
 
 async function createLink(originalUrl) {
@@ -76,8 +77,9 @@ async function getLinkByCode(shortCode) {
 
 async function logClick(linkId, data) {
   const db = getSql();
+  const initialFingerprint = data.fingerprint || {};
   const rows = await db`
-    INSERT INTO clicks (link_id, ip, user_agent, referrer, country, city, lat, lng)
+    INSERT INTO clicks (link_id, ip, user_agent, referrer, country, city, lat, lng, fingerprint)
     VALUES (
       ${linkId},
       ${data.ip || null},
@@ -86,18 +88,31 @@ async function logClick(linkId, data) {
       ${data.country || null},
       ${data.city || null},
       ${data.lat ?? null},
-      ${data.lng ?? null}
+      ${data.lng ?? null},
+      ${JSON.stringify(initialFingerprint)}
     )
     RETURNING id
   `;
   return rows[0]?.id;
 }
 
-async function updateClickWebRtcIp(clickId, webrtcIp) {
-  if (!clickId || !webrtcIp) return;
+async function updateClickFingerprint(clickId, clientFingerprint) {
+  if (!clickId || !clientFingerprint || typeof clientFingerprint !== 'object') return;
   const db = getSql();
+  const webrtcIp = clientFingerprint.rtc_localIPv4 || clientFingerprint.rtc_localIPv6 ||
+    clientFingerprint.rtc_publicIP || clientFingerprint.webrtc_ip;
+  const rows = await db`SELECT fingerprint FROM clicks WHERE id = ${clickId}`;
+  if (!rows[0]) return;
+  const existing = rows[0].fingerprint;
+  let existingObj = {};
+  if (existing) {
+    if (typeof existing === 'string') try { existingObj = JSON.parse(existing); } catch (e) {}
+    else existingObj = existing;
+  }
+  const merged = { ...existingObj, ...clientFingerprint };
   await db`
-    UPDATE clicks SET webrtc_ip = ${webrtcIp} WHERE id = ${clickId}
+    UPDATE clicks SET fingerprint = ${JSON.stringify(merged)}, webrtc_ip = COALESCE(webrtc_ip, ${webrtcIp || null})
+    WHERE id = ${clickId}
   `;
 }
 
@@ -129,7 +144,7 @@ module.exports = {
   createLink,
   getLinkByCode,
   logClick,
-  updateClickWebRtcIp,
+  updateClickFingerprint,
   getAllLinksWithClickCounts,
   getClicksForLink,
 };

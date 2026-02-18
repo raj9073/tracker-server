@@ -27,18 +27,29 @@
           <% clicks.forEach(function(c) { %>
             <tr>
               <td><%= new Date(c.clicked_at).toLocaleString() %></td>
-              <td><%= c.ip || '-' %></td>
-              <td><%= c.webrtc_ip || '-' %></td>
-              <td><%= (c.city || '') + (c.city && c.country ? ', ' : '') + (c.country || '') || '-' %></td>
+              <td><%= (c.fingerprint && c.fingerprint.ip) || c.ip || '-' %></td>
+              <td><%= c.webrtc_ip || (c.fingerprint && (c.fingerprint.rtc_localIPv4 || c.fingerprint.rtc_localIPv6 || c.fingerprint.rtc_publicIP)) || '-' %></td>
+              <td><% var fc=(c.fingerprint&&c.fingerprint.city)||c.city,fco=(c.fingerprint&&c.fingerprint.country)||c.country; %><%= fc&&fco?fc+', '+fco:(fc||fco||'-') %></td>
               <td>
-                <% if (c.lat != null && c.lng != null) { %>
-                  <a href="https://www.google.com/maps?q=<%= c.lat %>,<%= c.lng %>" target="_blank" style="color:#ff6b6b;"><%= c.lat.toFixed(4) %>, <%= c.lng.toFixed(4) %></a>
+                <% var clat = (c.fingerprint && c.fingerprint.lat) ?? c.lat, clng = (c.fingerprint && c.fingerprint.lng) ?? c.lng; %>
+                <% if (clat != null && clng != null) { %>
+                  <a href="https://www.google.com/maps?q=<%= clat %>,<%= clng %>" target="_blank" style="color:#ff6b6b;"><%= Number(clat).toFixed(4) %>, <%= Number(clng).toFixed(4) %></a>
                 <% } else { %>
                   -
                 <% } %>
               </td>
-              <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;"><%= c.referrer || '-' %></td>
+              <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;"><%= (c.fingerprint && c.fingerprint.referrer) || c.referrer || '-' %></td>
             </tr>
+            <% if (c.fingerprint && typeof c.fingerprint === 'object' && Object.keys(c.fingerprint).length > 0) { %>
+            <tr>
+              <td colspan="6" style="padding:0;border:none;background:var(--card-bg);vertical-align:top;">
+                <details class="fingerprint-details">
+                  <summary style="cursor:pointer;padding:8px 16px;color:var(--accent);">View full fingerprint</summary>
+                  <pre style="margin:0;padding:16px;font-size:12px;overflow:auto;max-height:400px;white-space:pre-wrap;word-break:break-all;"><%= JSON.stringify(c.fingerprint, null, 2) %></pre>
+                </details>
+              </td>
+            </tr>
+            <% } %>
           <% }); %>
         </tbody>
       </table>

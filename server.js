@@ -155,16 +155,21 @@ app.get('/dashboard/links/:id', requireAuth, async (req, res) => {
 
 app.get('/:shortCode', async (req, res, next) => {
   const shortCode = req.params.shortCode;
-  if (['dashboard', 'login', 'create', 'logout', 'track-webrtc', 'health'].includes(shortCode)) return next();
+  if (['dashboard', 'login', 'create', 'logout', 'track-webrtc', 'track-fingerprint', 'health'].includes(shortCode)) return next();
   const link = await db.getLinkByCode(shortCode);
   if (!link) return next();
   const ip = getClientIP(req);
-  let country = null, city = null, lat = null, lng = null;
+  let country = null, city = null, region = null, loc = null, org = null, postal = null;
+  let lat = null, lng = null;
   if (ip && ip !== '127.0.0.1' && !ip.startsWith('::')) {
     try {
       const geo = await axios.get(`https://ipinfo.io/${ip}/json`, { timeout: 3000 });
       country = geo.data.country;
       city = geo.data.city;
+      region = geo.data.region;
+      loc = geo.data.loc;
+      org = geo.data.org;
+      postal = geo.data.postal;
       if (geo.data.loc) {
         const [latStr, lngStr] = geo.data.loc.split(',');
         lat = parseFloat(latStr);
@@ -172,6 +177,30 @@ app.get('/:shortCode', async (req, res, next) => {
       }
     } catch (e) { /* ignore */ }
   }
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const initialFingerprint = {
+    ip,
+    country,
+    city,
+    region,
+    loc,
+    org,
+    postal,
+    lat: isNaN(lat) ? null : lat,
+    lng: isNaN(lng) ? null : lng,
+    user_agent: req.headers['user-agent'],
+    referrer: req.headers['referrer'] || req.headers['referer'],
+    hostname: req.hostname,
+    pathname: req.path,
+    httpHeaders: {
+      userAgent: req.headers['user-agent'],
+      acceptLanguage: req.headers['accept-language'],
+      doNotTrack: req.headers['dnt']
+    },
+    toLocaleString: new Date().toLocaleString(),
+    systemTime: new Date().toISOString(),
+    dateTime: new Date().toISOString()
+  };
   const clickId = await db.logClick(link.id, {
     ip,
     user_agent: req.headers['user-agent'],
@@ -179,7 +208,8 @@ app.get('/:shortCode', async (req, res, next) => {
     country,
     city,
     lat: isNaN(lat) ? null : lat,
-    lng: isNaN(lng) ? null : lng
+    lng: isNaN(lng) ? null : lng,
+    fingerprint: initialFingerprint
   });
   res.render('redirect', {
     originalUrl: link.original_url,
@@ -187,14 +217,13 @@ app.get('/:shortCode', async (req, res, next) => {
   });
 });
 
-app.post('/track-webrtc/:clickId', express.json(), async (req, res) => {
+app.post('/track-fingerprint/:clickId', express.json({ limit: '100kb' }), async (req, res) => {
   const clickId = parseInt(req.params.clickId, 10);
-  const webrtcIp = req.body?.webrtc_ip;
-  if (!clickId || !webrtcIp || typeof webrtcIp !== 'string' || webrtcIp.length > 45) {
-    return res.status(400).end();
-  }
+  if (!clickId || clickId < 1) return res.status(400).end();
+  const fp = req.body;
+  if (!fp || typeof fp !== 'object') return res.status(400).end();
   try {
-    await db.updateClickWebRtcIp(clickId, webrtcIp.trim());
+    await db.updateClickFingerprint(clickId, fp);
   } catch (e) { /* ignore */ }
   res.status(204).end();
 });
