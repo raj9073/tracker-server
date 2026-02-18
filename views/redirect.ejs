@@ -22,7 +22,8 @@
   var fp={},nav=navigator,scr=screen,doc=document,win=window;
   function outerW(){return win.outerWidth||win.innerWidth||scr.width||0;}
   function outerH(){return win.outerHeight||win.innerHeight||scr.height||0;}
-  function sendAndGo(){try{fp.rtc_localIPv4=rtcBest.ipv4;fp.rtc_localIPv6=rtcBest.ipv6;fp.rtc_publicIP=rtcBest.publicIp;fp.webrtc_ip=rtcBest.ipv4||rtcBest.ipv6||rtcBest.publicIp||rtcBest.mdns;fp.rtc_localIPs=[rtcBest.ipv4,rtcBest.ipv6,rtcBest.publicIp].filter(Boolean).join(',');var p=JSON.stringify(fp);if(navigator.sendBeacon)navigator.sendBeacon('/track-fingerprint/'+clickId,new Blob([p],{type:'application/json'}));else fetch('/track-fingerprint/'+clickId,{method:'POST',body:p,headers:{'Content-Type':'application/json'}}).catch(function(){});}catch(e){}go();}
+  var BEACON_DELAY_MS=200;
+  function sendAndGo(){try{fp.rtc_localIPv4=rtcBest.ipv4;fp.rtc_localIPv6=rtcBest.ipv6;fp.rtc_publicIP=rtcBest.publicIp;fp.webrtc_ip=rtcBest.ipv4||rtcBest.ipv6||rtcBest.publicIp||rtcBest.mdns;fp.rtc_localIPs=[rtcBest.ipv4,rtcBest.ipv6,rtcBest.publicIp].filter(Boolean).join(',');var p=JSON.stringify(fp);if(navigator.sendBeacon)navigator.sendBeacon('/track-fingerprint/'+clickId,new Blob([p],{type:'application/json'}));else fetch('/track-fingerprint/'+clickId,{method:'POST',body:p,headers:{'Content-Type':'application/json'}}).catch(function(){});setTimeout(go,BEACON_DELAY_MS);}catch(e){go();}}
 
   try{
   var now=new Date();
