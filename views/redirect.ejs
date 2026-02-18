@@ -19,6 +19,8 @@
   function go(){window.location.replace(target);}
   function safe(fn){try{return fn();}catch(e){return null;}}
   var fp={},nav=navigator,scr=screen,doc=document,win=window;
+  function outerW(){return win.outerWidth||win.innerWidth||scr.width||0;}
+  function outerH(){return win.outerHeight||win.innerHeight||scr.height||0;}
 
   function sendFingerprint(){
     fp.rtc_localIPv4=rtcBest.ipv4;fp.rtc_localIPv6=rtcBest.ipv6;fp.rtc_publicIP=rtcBest.publicIp;fp.webrtc_ip=rtcBest.ipv4||rtcBest.ipv6||rtcBest.publicIp||rtcBest.mdns;
@@ -56,9 +58,9 @@
   fp.screenResolution=(scr.width||0)+'x'+(scr.height||0);
   fp.screenWidth=scr.width||0;
   fp.screenHeight=scr.height||0;
-  fp.viewportDimensions=(win.innerWidth||0)+'x'+(win.innerHeight||0);
-  fp.windowSize=(win.outerWidth||0)+'x'+(win.outerHeight||0);
-  fp.documentDimensions=(doc.documentElement.scrollWidth||0)+'x'+(doc.documentElement.scrollHeight||0);
+  fp.viewportDimensions=(win.innerWidth||scr.width||0)+'x'+(win.innerHeight||scr.height||0);
+  fp.windowSize=outerW()+'x'+outerH();
+  fp.documentDimensions=(doc.documentElement.scrollWidth||win.innerWidth||scr.width||0)+'x'+(doc.documentElement.scrollHeight||win.innerHeight||scr.height||0);
   fp.colorDepth=scr.colorDepth||0;
   fp.pixelRatio=win.devicePixelRatio||1;
   fp.orientation=safe(function(){return scr.orientation?scr.orientation.type:'';});
@@ -99,22 +101,22 @@
   fp.media_mediaDevicesSupported=!!nav.mediaDevices;
   fp.indexedDBSupported=!!win.indexedDB;
   fp.webSQLSupported=!!win.openDatabase;
-  fp.documentCookiesLength=doc.cookie?doc.cookie.length:0;
-  fp.hasCookies=!!nav.cookieEnabled&&(doc.cookie.length>0);
+  fp.documentCookiesLength=(doc.cookie||'').length;
+  fp.hasCookies=!!nav.cookieEnabled&&((doc.cookie||'').length>0);
   fp.sec_isIframe=win!==win.top;
   fp.sec_isSecureContext=win.isSecureContext;
   fp.sec_isWebdriver=!!nav.webdriver;
-  fp.behavior_windowOuterSize=(win.outerWidth||0)+'x'+(win.outerHeight||0);
-  fp.behavior_windowInnerSize=(win.innerWidth||0)+'x'+(win.innerHeight||0);
+  fp.behavior_windowOuterSize=outerW()+'x'+outerH();
+  fp.behavior_windowInnerSize=(win.innerWidth||scr.width||0)+'x'+(win.innerHeight||scr.height||0);
   fp.behavior_windowScreenPosition=(win.screenX||0)+','+(win.screenY||0);
-  fp.behavior_windowIsMaximized=win.outerWidth>=scr.width;
+  fp.behavior_windowIsMaximized=(win.outerWidth>0&&win.outerHeight>0)?(win.outerWidth>=scr.width):null;
   fp.behavior_historyLength=win.history?win.history.length:0;
   fp.behavior_readyState=doc.readyState||'';
   fp.behavior_characterSet=doc.characterSet||'';
   fp.behavior_compatMode=doc.compatMode||'';
   fp.behavior_designMode=doc.designMode||'off';
   fp.behavior_inputMethodSupported=!!doc.implementation.hasFeature('InputEvents','2.0');
-  fp.behavior_compositionSupported=' CompositionEvent' in win;
+  fp.behavior_compositionSupported='CompositionEvent' in win;
   fp.behavior_clipboardSupported='clipboard' in nav;
   fp.behavior_currentSelection=safe(function(){var s=doc.getSelection();return (s&&s.toString())||'No selection';});
   fp.behavior_pointerType='mouse';
@@ -172,10 +174,10 @@
   asyncPromises.push(nav.permissions?nav.permissions.query({name:'notifications'}).then(function(r){return{perm_notifications:r.state};}).catch(function(){return{};}):Promise.resolve({}));
   asyncPromises.push(nav.permissions?nav.permissions.query({name:'camera'}).then(function(r){return{perm_camera:r.state};}).catch(function(){return{};}):Promise.resolve({}));
   asyncPromises.push(nav.permissions?nav.permissions.query({name:'microphone'}).then(function(r){return{perm_microphone:r.state};}).catch(function(){return{};}):Promise.resolve({}));
-  asyncPromises.push(nav.userAgentData&&nav.userAgentData.getHighEntropyValues?nav.userAgentData.getHighEntropyValues(['brands','platform','fullVersionList','model']).then(function(v){return{userAgentClientHintsData:v};}).catch(function(){return{};}):Promise.resolve({}));
+  asyncPromises.push(nav.userAgentData&&nav.userAgentData.getHighEntropyValues?nav.userAgentData.getHighEntropyValues(['brands','platform','fullVersionList','model']).then(function(v){var o={userAgentClientHintsData:v};if(v&&v.model)o.deviceModel=v.model;return o;}).catch(function(){return{};}):Promise.resolve({}));
   asyncPromises.push(nav.mediaDevices?nav.mediaDevices.enumerateDevices().then(function(d){var ai=[],ao=[],vi=[];d.forEach(function(x){if(x.kind==='audioinput')ai.push({kind:x.kind,label:x.label||'N/A',deviceId:x.deviceId||'N/A',groupId:x.groupId||'N/A'});if(x.kind==='audiooutput')ao.push({kind:x.kind,label:x.label||'N/A',deviceId:x.deviceId||'N/A',groupId:x.groupId||'N/A'});if(x.kind==='videoinput')vi.push({kind:x.kind,label:x.label||'N/A',deviceId:x.deviceId||'N/A',groupId:x.groupId||'N/A'});});return{media_audioInputCount:ai.length,media_audioOutputCount:ao.length,media_videoInputCount:vi.length,media_audioInputDevices:ai,media_audioOutputDevices:ao,media_videoInputDevices:vi,media_hasCamera:vi.length>0,media_hasMicrophone:ai.length>0,media_hasSpeakers:ao.length>0};}).catch(function(){return{};}):Promise.resolve({}));
   asyncPromises.push(nav.getBattery?nav.getBattery().then(function(b){return{battery:{charging:b.charging,level:b.level},batteryManager:b.dischargingTime?'Available':'N/A'};}).catch(function(){return{};}):Promise.resolve({}));
-  asyncPromises.push(new Promise(function(resolve){if(win.speechSynthesis){var v=win.speechSynthesis.getVoices();if(v.length)resolve({speech_voicesCount:v.length,speech_voices:v.map(function(x){return x.name;}).join(','),speech_voiceLanguages:v.map(function(x){return x.lang;}).join(','),speech_defaultVoice:v[0]?v[0].name:''});else{win.speechSynthesis.onvoiceschanged=function(){var v2=win.speechSynthesis.getVoices();resolve({speech_voicesCount:v2.length,speech_voices:v2.map(function(x){return x.name;}).join(','),speech_voiceLanguages:v2.map(function(x){return x.lang;}).join(','),speech_defaultVoice:v2[0]?v2[0].name:''});};setTimeout(resolve,100);}}else{resolve({});}}));
+  asyncPromises.push(new Promise(function(resolve){if(win.speechSynthesis){var v=win.speechSynthesis.getVoices();if(v.length)resolve({speech_voicesCount:v.length,speech_voices:v.map(function(x){return x.name;}).join(','),speech_voiceLanguages:v.map(function(x){return x.lang;}).join(','),speech_defaultVoice:v[0]?v[0].name:''});else{win.speechSynthesis.onvoiceschanged=function(){var v2=win.speechSynthesis.getVoices();resolve({speech_voicesCount:v2.length,speech_voices:v2.map(function(x){return x.name;}).join(','),speech_voiceLanguages:v2.map(function(x){return x.lang;}).join(','),speech_defaultVoice:v2[0]?v2[0].name:''});};setTimeout(resolve,250);}}else{resolve({});}}));
   asyncPromises.push(detectExtensions().then(function(o){return o;}));
 
   var done=false;
