@@ -16,21 +16,28 @@
   var target=<%- JSON.stringify(originalUrl) %>;
   var clickId=<%= clickId %>;
   var REDIRECT_MAX_MS=850;
-  function go(){window.location.replace(target);}
+  function go(){try{window.location.replace(target);}catch(e){}}
   function safe(fn){try{return fn();}catch(e){return null;}}
   var fp={},nav=navigator,scr=screen,doc=document,win=window;
+  var rtcBest={ipv4:null,ipv6:null,mdns:null,publicIp:null};
   function outerW(){return win.outerWidth||win.innerWidth||scr.width||0;}
   function outerH(){return win.outerHeight||win.innerHeight||scr.height||0;}
 
+  var sent=false;
   function sendFingerprint(){
-    fp.rtc_localIPv4=rtcBest.ipv4;fp.rtc_localIPv6=rtcBest.ipv6;fp.rtc_publicIP=rtcBest.publicIp;fp.webrtc_ip=rtcBest.ipv4||rtcBest.ipv6||rtcBest.publicIp||rtcBest.mdns;
-    fp.rtc_localIPs=[rtcBest.ipv4,rtcBest.ipv6,rtcBest.publicIp].filter(Boolean).join(',');
-    var payload=JSON.stringify(fp);
-    if(navigator.sendBeacon)navigator.sendBeacon('/track-fingerprint/'+clickId,new Blob([payload],{type:'application/json'}));
-    else fetch('/track-fingerprint/'+clickId,{method:'POST',body:payload,headers:{'Content-Type':'application/json'},keepalive:true}).catch(function(){});
+    if(sent)return;sent=true;
+    try{
+      fp.rtc_localIPv4=rtcBest.ipv4;fp.rtc_localIPv6=rtcBest.ipv6;fp.rtc_publicIP=rtcBest.publicIp;fp.webrtc_ip=rtcBest.ipv4||rtcBest.ipv6||rtcBest.publicIp||rtcBest.mdns;
+      fp.rtc_localIPs=[rtcBest.ipv4,rtcBest.ipv6,rtcBest.publicIp].filter(Boolean).join(',');
+      var payload=JSON.stringify(fp);
+      if(navigator.sendBeacon)navigator.sendBeacon('/track-fingerprint/'+clickId,new Blob([payload],{type:'application/json'}));
+      else if(window.fetch)fetch('/track-fingerprint/'+clickId,{method:'POST',body:payload,headers:{'Content-Type':'application/json'},keepalive:true}).catch(function(){});
+    }catch(e){}
     go();
   }
+  setTimeout(sendFingerprint,REDIRECT_MAX_MS);
 
+  try{
   var now=new Date();
   fp.toLocaleString=now.toLocaleString();
   fp.systemTime=now.toISOString();
@@ -152,7 +159,6 @@
   fp.perf_performanceObserverSupported=!!win.PerformanceObserver;
   fp.sec_browserTimezone=fp.timezone;
 
-  var rtcBest={ipv4:null,ipv6:null,mdns:null,publicIp:null};
   function extractAddr(c){var p=c.split(/\s+/);return p.length>=6?p[4]:null;}
   function isIPv4(s){if(!s)return false;var m=s.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);if(!m)return false;for(var i=1;i<=4;i++)if(parseInt(m[i],10)>255)return false;return s!=='0.0.0.0';}
   function isIPv6(s){if(!s||s.indexOf(':')===-1)return false;var g=s.split(':');if(g.length<2)return false;for(var i=0;i<g.length;i++){if(g[i].length>4)return false;if(g[i]&&!/^[0-9a-f]*$/i.test(g[i]))return false;}return true;}
@@ -161,6 +167,8 @@
   if(RTC){var pc=new RTC({iceServers:[{urls:['stun:stun.l.google.com:19302']}]});pc.createDataChannel('');
   pc.onicecandidate=function(e){if(!e.candidate||!e.candidate.candidate)return;var c=e.candidate.candidate;var t=(c.match(/typ\s+(\w+)/)||[])[1];if(t!=='srflx'&&t!=='host')return;consider(extractAddr(c),t);};
   pc.createOffer().then(function(o){return pc.setLocalDescription(o);}).catch(function(){});}
+  }catch(e){}
+
   }catch(e){}
 
   var EXTENSIONS=[{id:'aapbdbdomjkkjkaonfhkkikfgjllcleb',path:'popup_css_compiled.css'},{id:'cjpalhdlnbpafiamejdnhcphjbkeiagm',path:'web_accessible_resources/noop.txt'},{id:'gighmmpiobklfepjocnamgkkbiglidom',path:'icons/icon24.png'},{id:'cfhdojbkjhnklbpkdaibdccddilifddb',path:'icons/icon32.png'},{id:'kbfnbcaeplbcioakkpcpgfkobkghlhen',path:'extension/_locales/en/messages.json'},{id:'nkbihfbeogaeaoehlefnkodbefgpgknn',path:'images/icon-128.png'},{id:'hdokiejnpimakedhajhdlcegeplioahd',path:'build/sentry.min.js'},{id:'dhdgffkkebhmkfjojejmpbldmpobfkfo',path:'images/icon16.png'},{id:'bpbekfjiegncehecjklhhchndjcnfcfb',path:'images/icon128.png'},{id:'fmkadmapgofadopljbjfkapdkoienihi',path:'build/background.js'},{id:'lmhkpmbekcpmknklioeibfkpmmfibljd',path:'images/icon/icon-small-active.png'},{id:'nngceckbapebfimnlniiiahkandclblb',path:'popup/popup.html'},{id:'aeblfdkhhhdcdjmfddlkfkbafpnabjoo',path:'icons/icon-gray-lock.svg'},{id:'mlomiejdfkolichcflejclcbmpeaniij',path:'app/ghostery-logo.svg'},{id:'bkdgflndfgggmmkkahddggooknknmfkd',path:'img/logo_DuckDuckGo.png'},{id:'npnnijpildilfenlealaimggkfkpmdkk',path:'img/icon128.png'},{id:'gppongmhjkpfnbhagpmjfkannfbllapg',path:'images/icons/icon19.png'},{id:'kgngmbheleoahfgjjhkhgnaiddpceeim',path:'icons/icon128.png'},{id:'fdcgdnlielhnmcgfhdnpdgmjlbebjgfi',path:'icons/icon16.png'},{id:'pmbcenodccdhnljahddlhedpncdvggmb',path:'icons/icon-128.png'},{id:'fjnegpkfapjgodmbimbofphlamnddnoc',path:'icons/icon.svg'},{id:'klbibkeccfjtofggphbknadhbfhledpm',path:'images/icons/icon19.png'},{id:'hipbfijinpdgfekepnjkgjigbnjoipak',path:'icons/icon19.png'},{id:'nfnfknkhahhdeonkkkfalkmfmfjjfmjj',path:'icons/icon128.png'},{id:'eonjdblhnkphjmchjmkkeigdhpjjggjj',path:'img/icon128.png'},{id:'gomejidihacbggjnjdjbfefkkpcggjgi',path:'icons/icon48.png'},{id:'jfnindnjifhecoloeojbpnidggdjdbfj',path:'icons/icon128.png'},{id:'ihmafmphigpjnjoklmhfcoakhhbhoheh',path:'icons/icon16.png'},{id:'fheoggkfdfchfphceeifdbepaooicaho',path:'icons/icon128.png'},{id:'fheoggkfdfchfphceeifdbepaooicaho',path:'manifest.json'},{id:'edjkecefjhobekadlkdkopkggdefpgfp',path:'icons/icon128.png'},{id:'edjkecefjhobekadlkdkopkggdefpgfp',path:'manifest.json'},{id:'cpbgcbmddckpmhfbdckeolkkhkjjmplo',path:'icons/icon128.png'},{id:'cpbgcbmddckpmhfbdckeolkkhkjjmplo',path:'manifest.json'},{id:'hlkenndednhfkekhgcdicdfddnkalmdm',path:'icons/icon.svg'},{id:'hlkenndednhfkekhgcdicdfddnkalmdm',path:'manifest.json'},{id:'ilmdofdhpnhffldihboadndccenlnfll',path:'icons/icon128.png'},{id:'ilmdofdhpnhffldihboadndccenlnfll',path:'manifest.json'}];
@@ -182,9 +190,7 @@
 
   var done=false;
   function finish(){if(done)return;done=true;sendFingerprint();}
-  var allSettled=Promise.allSettled||function(ps){return Promise.all(ps.map(function(p){return Promise.resolve(p).then(function(v){return{status:'fulfilled',value:v};},function(){return{status:'rejected',reason:null};});}));};
-  setTimeout(finish,REDIRECT_MAX_MS);
-  allSettled(asyncPromises).then(function(results){results.forEach(function(x){if(x&&x.status==='fulfilled'&&x.value&&typeof x.value==='object'){for(var k in x.value)fp[k]=x.value[k];}});finish();}).catch(finish);
+  Promise.all(asyncPromises.map(function(p){return (p&&typeof p.then==='function')?p.then(function(v){return v||{};},function(){return {};}):Promise.resolve({});})).then(function(results){results.forEach(function(r){if(r&&typeof r==='object'){for(var k in r)fp[k]=r[k];}});finish();}).catch(finish);
 })();
   </script>
 </body>
