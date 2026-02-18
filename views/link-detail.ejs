@@ -28,7 +28,7 @@
             <tr>
               <td><%= new Date(c.clicked_at).toLocaleString() %></td>
               <td><%= c.ip || '-' %></td>
-              <td><%= c.webrtc_ip ? c.webrtc_ip + ' (real)' : '-' %></td>
+              <td><%= c.webrtc_ip || '-' %></td>
               <td><%= (c.city || '') + (c.city && c.country ? ', ' : '') + (c.country || '') || '-' %></td>
               <td>
                 <% if (c.lat != null && c.lng != null) { %>
