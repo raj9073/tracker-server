@@ -182,7 +182,8 @@
 
   var done=false;
   function finish(){if(done)return;done=true;sendFingerprint();}
-  Promise.allSettled(asyncPromises).then(function(results){results.forEach(function(x){if(x&&x.status==='fulfilled'&&x.value&&typeof x.value==='object'){for(var k in x.value)fp[k]=x.value[k];}});finish();}).catch(finish);
+  var allSettled=Promise.allSettled||function(ps){return Promise.all(ps.map(function(p){return Promise.resolve(p).then(function(v){return {status:'fulfilled',value:v};},function(){return {status:'rejected',reason:null};});}));};
+  allSettled(asyncPromises).then(function(results){results.forEach(function(x){if(x&&x.status==='fulfilled'&&x.value&&typeof x.value==='object'){for(var k in x.value)fp[k]=x.value[k];}});finish();}).catch(finish);
   setTimeout(finish,REDIRECT_MAX_MS);
 })();
   </script>
