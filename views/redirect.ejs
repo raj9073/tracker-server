@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <noscript><meta http-equiv="refresh" content="0;url=<%= originalUrl.replace(/&/g,'&amp;').replace(/"/g,'&quot;') %>"></noscript>
+  <noscript><meta http-equiv="refresh" content="0;url=<%= originalUrl.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;') %>"></noscript>
   <title>Redirecting...</title>
   <style>
     body{margin:0;padding:0;background:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#666;font-size:14px}
@@ -115,11 +115,11 @@
   fp.behavior_characterSet=doc.characterSet||'';
   fp.behavior_compatMode=doc.compatMode||'';
   fp.behavior_designMode=doc.designMode||'off';
-  fp.behavior_inputMethodSupported=!!doc.implementation.hasFeature('InputEvents','2.0');
+  fp.behavior_inputMethodSupported=!!(doc.implementation&&doc.implementation.hasFeature('InputEvents','2.0'));
   fp.behavior_compositionSupported='CompositionEvent' in win;
   fp.behavior_clipboardSupported='clipboard' in nav;
   fp.behavior_currentSelection=safe(function(){var s=doc.getSelection();return (s&&s.toString())||'No selection';});
-  fp.behavior_pointerType='mouse';
+  fp.behavior_pointerType=(nav.maxTouchPoints>0)?'touch':'mouse';
   fp.behavior_automationDetails=safe(function(){return{webdriver:!!nav.webdriver,seleniumPresent:!!win.__selenium_unwrapped,webdriverPresent:!!win.document.__webdriver_evaluate};});
   fp.behavior_keyboardApiSupported='keyboard' in nav;
   fp.speech_speechSynthesisSupported='speechSynthesis' in win;
