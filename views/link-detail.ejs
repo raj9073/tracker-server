@@ -5,8 +5,30 @@
   <style>
     .view-toggle .btn { margin-right: 8px; }
     .view-toggle .btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-    #view-table { overflow-x: auto; }
-    #view-table table { min-width: 100%; }
+    #view-table {
+      overflow-x: auto;
+      max-width: 100%;
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    #view-table table {
+      width: max-content;
+      min-width: 100%;
+      border-collapse: collapse;
+    }
+    #view-table th,
+    #view-table td {
+      white-space: nowrap;
+      min-width: 90px;
+      max-width: 280px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    #view-table th { color: #8b949e; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -91,6 +113,11 @@
     window.__CLICKS__ = <%- JSON.stringify(clicks) %>;
     (function(){
       var clicks = window.__CLICKS__;
+      if(!Array.isArray(clicks)) clicks=[];
+      clicks.forEach(function(c){
+        if(typeof c.fingerprint==='string'){ try{c.fingerprint=JSON.parse(c.fingerprint);}catch(e){c.fingerprint={};} }
+        else if(!c.fingerprint) c.fingerprint={};
+      });
       var keys = ['clicked_at','id','ip','webrtc_ip'];
       clicks.forEach(function(c){
         var fp = c.fingerprint || {};
@@ -106,22 +133,24 @@
         return fp[k];
       }
       function str(v){
-        if(v==null) return '';
+        if(v==null||v===undefined) return '';
         return typeof v==='object' ? JSON.stringify(v) : String(v);
       }
       var thead = document.getElementById('table-head');
       var tbody = document.getElementById('table-body');
+      if(!thead||!tbody) return;
       var tr = document.createElement('tr');
       keys.forEach(function(k){ var th=document.createElement('th'); th.textContent=k; tr.appendChild(th); });
       var th = document.createElement('th'); th.textContent='Actions'; tr.appendChild(th);
       thead.appendChild(tr);
       clicks.forEach(function(c){
         var row = document.createElement('tr');
-        keys.forEach(function(k){ var td=document.createElement('td'); td.textContent=str(val(c,k)); td.style.maxWidth='200px'; td.style.overflow='hidden'; td.style.textOverflow='ellipsis'; row.appendChild(td); });
+        keys.forEach(function(k){ var td=document.createElement('td'); td.textContent=str(val(c,k)); row.appendChild(td); });
         var td = document.createElement('td');
+        td.style.whiteSpace = 'nowrap';
         var form = document.createElement('form');
         form.method = 'POST';
-        form.action = '/dashboard/links/<%= link.id %>/clicks/' + c.id + '/delete';
+        form.action = '/dashboard/links/<%= link.id %>/clicks/' + (c.id||'') + '/delete';
         form.onsubmit = function(){ return confirm('Delete this data entry?'); };
         var btn = document.createElement('button');
         btn.type = 'submit';
