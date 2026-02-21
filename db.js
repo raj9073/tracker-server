@@ -75,6 +75,12 @@ async function getLinkByCode(shortCode) {
   return rows[0] || null;
 }
 
+async function getLinkById(id) {
+  const db = getSql();
+  const rows = await db`SELECT * FROM links WHERE id = ${id}`;
+  return rows[0] || null;
+}
+
 async function logClick(linkId, data) {
   const db = getSql();
   const initialFingerprint = data.fingerprint || {};
@@ -139,12 +145,26 @@ async function getClicksForLink(linkId) {
   return rows;
 }
 
+async function deleteLink(linkId) {
+  const database = getSql();
+  await database`DELETE FROM clicks WHERE link_id = ${linkId}`;
+  await database`DELETE FROM links WHERE id = ${linkId}`;
+}
+
+async function deleteClick(clickId, linkId) {
+  const database = getSql();
+  await database`DELETE FROM clicks WHERE id = ${clickId} AND link_id = ${linkId}`;
+}
+
 module.exports = {
   initSchema,
   createLink,
   getLinkByCode,
+  getLinkById,
   logClick,
   updateClickFingerprint,
   getAllLinksWithClickCounts,
   getClicksForLink,
+  deleteLink,
+  deleteClick,
 };

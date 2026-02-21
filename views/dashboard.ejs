@@ -11,6 +11,8 @@
         <button type="submit" class="btn btn-danger">Logout</button>
       </form>
     </div>
+    <% var dashMsg = typeof deleted !== 'undefined' && deleted ? 'Link deleted.' : (typeof error !== 'undefined' && error ? (error === 'notfound' ? 'Link not found.' : 'Failed to delete.') : null); %>
+    <% if (dashMsg) { %><p class="mt" style="color: var(--<%= error ? 'danger' : 'success' %>);"><%= dashMsg %></p><% } %>
     <% if (links.length === 0) { %>
       <p class="mt">No links yet. <a href="/">Create one</a></p>
     <% } else { %>
@@ -27,6 +29,9 @@
             <div class="flex">
               <button type="button" class="btn btn-secondary copy-btn" data-short-code="<%= link.short_code %>">Copy Link</button>
               <a href="/<%= link.short_code %>" target="_blank" class="btn btn-primary">Open</a>
+              <form method="POST" action="/dashboard/links/<%= link.id %>/delete" style="margin:0;" onsubmit="return confirm('Delete this link and all its data?');">
+                <button type="submit" class="btn btn-danger">Delete</button>
+              </form>
             </div>
           </div>
         <% }); %>

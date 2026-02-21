@@ -140,7 +140,7 @@ app.post('/logout', (req, res) => {
 
 app.get('/dashboard', requireAuth, async (req, res) => {
   const links = await db.getAllLinksWithClickCounts();
-  res.render('dashboard', { links });
+  res.render('dashboard', { links, deleted: req.query.deleted, error: req.query.error });
 });
 
 app.get('/dashboard/links/:id', requireAuth, async (req, res) => {
@@ -150,7 +150,69 @@ app.get('/dashboard/links/:id', requireAuth, async (req, res) => {
   const link = links.find(l => l.id === id);
   if (!link) return res.redirect('/dashboard');
   const clicks = await db.getClicksForLink(id);
-  res.render('link-detail', { link, clicks });
+  res.render('link-detail', { link, clicks, deleted: req.query.deleted, error: req.query.error });
+});
+
+app.post('/dashboard/links/:id/delete', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.redirect('/dashboard');
+  const link = await db.getLinkById(id);
+  if (!link) return res.redirect('/dashboard?error=notfound');
+  try {
+    await db.deleteLink(id);
+    return res.redirect('/dashboard?deleted=1');
+  } catch (e) {
+    console.error('Delete link error:', e);
+    return res.redirect('/dashboard?error=delete');
+  }
+});
+
+app.post('/dashboard/links/:linkId/clicks/:clickId/delete', requireAuth, async (req, res) => {
+  const linkId = parseInt(req.params.linkId, 10);
+  const clickId = parseInt(req.params.clickId, 10);
+  if (isNaN(linkId) || isNaN(clickId)) return res.redirect('/dashboard');
+  try {
+    await db.deleteClick(clickId, linkId);
+    return res.redirect('/dashboard/links/' + linkId + '?deleted=1');
+  } catch (e) {
+    console.error('Delete click error:', e);
+    return res.redirect('/dashboard/links/' + linkId + '?error=delete');
+  }
+});
+
+app.get('/dashboard/links/:id/export/csv', requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.redirect('/dashboard');
+  const link = await db.getLinkById(id);
+  if (!link) return res.redirect('/dashboard');
+  const clicks = await db.getClicksForLink(id);
+  const allKeys = new Set(['clicked_at', 'id', 'ip', 'webrtc_ip']);
+  clicks.forEach(c => {
+    const fp = c.fingerprint || {};
+    Object.keys(fp).forEach(k => allKeys.add(k));
+  });
+  const keys = ['clicked_at', 'id', 'ip', 'webrtc_ip', ...Array.from(allKeys).filter(k => !['clicked_at', 'id', 'ip', 'webrtc_ip'].includes(k)).sort()];
+  function escapeCsv(val) {
+    if (val == null) return '';
+    const s = typeof val === 'object' ? JSON.stringify(val) : String(val);
+    if (/[,"\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  const rows = [keys.map(escapeCsv).join(',')];
+  clicks.forEach(c => {
+    const fp = c.fingerprint || {};
+    const merged = {
+      clicked_at: c.clicked_at,
+      id: c.id,
+      ip: c.ip || fp.ip,
+      webrtc_ip: c.webrtc_ip || fp.rtc_localIPv4 || fp.rtc_localIPv6 || fp.rtc_publicIP || fp.webrtc_ip,
+      ...fp
+    };
+    rows.push(keys.map(k => escapeCsv(merged[k])).join(','));
+  });
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="link-' + (link.short_code || id) + '-clicks.csv"');
+  res.send('\uFEFF' + rows.join('\n'));
 });
 
 app.get('/:shortCode', async (req, res, next) => {
